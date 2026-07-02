@@ -1,4 +1,4 @@
-# 🚀 Aplikasi SigmaHub (Sigma Gravity)
+# 🚀 Aplikasi SigmaHub
 
 Repositori ini berisi *source code* untuk aplikasi SigmaHub. Ikuti panduan singkat di bawah ini untuk mengunduh dan menjalankan aplikasi ini di laptop/komputer masing-masing.
 
