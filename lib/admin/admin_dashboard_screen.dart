@@ -1,6 +1,7 @@
 // File: lib/admin/admin_dashboard_screen.dart
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../sigma_theme.dart';
 import '../profile/profile_screen.dart'; 
 import '../login/login_screen.dart'; 
@@ -18,6 +19,38 @@ class AdminDashboardScreen extends StatefulWidget {
 
 class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   int _kategoriAktif = 0; // 0: Semua, 1: Prestasi, 2: Umum
+  bool sedangProsesKeluar = false;
+
+  // Fungsi untuk memutus sesi admin dan kembali ke login
+  Future<void> prosesKeluar() async {
+    setState(() {
+      sedangProsesKeluar = true;
+    });
+
+    try {
+      // Putus sesi autentikasi Supabase secara resmi
+      await Supabase.instance.client.auth.signOut();
+    } catch (e) {
+      debugPrint('Error saat keluar admin: $e');
+    } finally {
+      if (mounted) {
+        setState(() {
+          sedangProsesKeluar = false;
+        });
+
+        // Hapus seluruh tumpukan halaman dan arahkan kembali ke LoginScreen
+        Navigator.pushAndRemoveUntil(
+          context,
+          PageRouteBuilder(
+            pageBuilder: (context, a1, a2) => const LoginScreen(),
+            transitionDuration: Duration.zero,
+            reverseTransitionDuration: Duration.zero,
+          ),
+          (route) => false,
+        );
+      }
+    }
+  }
 
   void _tampilkanKonfirmasiHapus(BuildContext context, dynamic id, String name, bool isDark, Color primaryWarna) {
     showDialog(
@@ -487,17 +520,18 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
             padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 4.0),
             child: ListTile(
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-              leading: const Icon(Icons.logout, color: Colors.red),
-              title: const Text('Keluar / Logout', style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
-              onTap: () => Navigator.pushAndRemoveUntil(
-                context,
-                PageRouteBuilder(
-                  pageBuilder: (context, a1, a2) => const LoginScreen(),
-                  transitionDuration: Duration.zero,
-                  reverseTransitionDuration: Duration.zero,
-                ),
-                (route) => false,
+              leading: sedangProsesKeluar
+                  ? const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(color: Colors.red, strokeWidth: 2),
+                    )
+                  : const Icon(Icons.logout, color: Colors.red),
+              title: Text(
+                sedangProsesKeluar ? 'Mengeluarkan...' : 'Keluar / Logout',
+                style: const TextStyle(color: Colors.red, fontWeight: FontWeight.bold),
               ),
+              onTap: sedangProsesKeluar ? null : prosesKeluar,
             ),
           ),
         ],

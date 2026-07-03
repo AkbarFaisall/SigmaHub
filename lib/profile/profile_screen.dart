@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../sigma_theme.dart';
 import '../home_screen.dart';
 import '../bookmark_screen.dart';
@@ -19,6 +20,29 @@ class ProfileScreen extends StatefulWidget {
 }
 
 class _ProfileScreenState extends State<ProfileScreen> {
+  bool sedangProsesKeluar = false;
+
+  // Fungsi untuk menangani proses logout secara aman dari Supabase
+  Future<void> prosesKeluar() async {
+    setState(() {
+      sedangProsesKeluar = true;
+    });
+
+    try {
+      // Putus sesi autentikasi Supabase secara resmi
+      await Supabase.instance.client.auth.signOut();
+    } catch (e) {
+      debugPrint('Gagal keluar sesi: $e');
+    } finally {
+      if (mounted) {
+        setState(() {
+          sedangProsesKeluar = false;
+        });
+        // Arahkan kembali ke Halaman Login secara bersih
+        Navigator.pushReplacementNamed(context, '/login');
+      }
+    }
+  }
   Widget _buildAvatar(String avatarUrl, String name, double radius, double fontSize, Color primaryWarna, bool isDark) {
     if (avatarUrl.isNotEmpty) {
       if (avatarUrl.startsWith('data:image')) {
@@ -189,9 +213,21 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     borderRadius: BorderRadius.circular(12),
                   ),
                 ),
-                onPressed: () => Navigator.pushReplacementNamed(context, '/login'),
-                icon: const Icon(Icons.logout),
-                label: const Text('Keluar', style: TextStyle(fontWeight: FontWeight.bold)),
+                onPressed: sedangProsesKeluar ? null : prosesKeluar,
+                icon: sedangProsesKeluar
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: WarnaSigma.peringatan,
+                        ),
+                      )
+                    : const Icon(Icons.logout),
+                label: Text(
+                  sedangProsesKeluar ? 'Mengeluarkan...' : 'Keluar',
+                  style: const TextStyle(fontWeight: FontWeight.bold),
+                ),
               ),
             ],
           ),
