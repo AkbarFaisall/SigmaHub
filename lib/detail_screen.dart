@@ -1,5 +1,6 @@
 // File: lib/detail_screen.dart
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'sigma_theme.dart';
 import 'profile/profile_screen.dart'; // IMPORT PROFILE UNTUK AKSES VARIABEL DARK MODE
 
@@ -267,12 +268,55 @@ class DetailScreen extends StatelessWidget {
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: WarnaSigma.emas),
-            onPressed: () => Navigator.pop(context), 
+            onPressed: () {
+              Navigator.pop(context); 
+              bukaTautan(beasiswa['link'], context);
+            }, 
             child: const Text('Lanjutkan', style: TextStyle(color: WarnaSigma.utama))
           ),
         ],
       ),
     );
+  }
+
+  // Fungsi asinkronus untuk membuka link eksternal beasiswa menggunakan url_launcher
+  Future<void> bukaTautan(String? urlMentah, BuildContext konteks) async {
+    final penyajiPesan = ScaffoldMessenger.of(konteks);
+    if (urlMentah == null || urlMentah.trim().isEmpty) {
+      penyajiPesan.showSnackBar(
+        const SnackBar(
+          content: Text('Tidak dapat membuka tautan karena link pendaftaran kosong.'),
+          backgroundColor: Colors.red,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+
+    final Uri tautanValid = Uri.parse(urlMentah.trim());
+    try {
+      final bool apakahBisaBuka = await canLaunchUrl(tautanValid);
+      if (apakahBisaBuka) {
+        await launchUrl(tautanValid, mode: LaunchMode.externalApplication);
+      } else {
+        penyajiPesan.showSnackBar(
+          const SnackBar(
+            content: Text('Tidak dapat membuka tautan.'),
+            backgroundColor: Colors.red,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } catch (e) {
+      debugPrint('Error launching URL: $e');
+      penyajiPesan.showSnackBar(
+        const SnackBar(
+          content: Text('Tidak dapat membuka tautan.'),
+          backgroundColor: Colors.red,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
   }
 
   Widget _buatHeaderFallback() {
