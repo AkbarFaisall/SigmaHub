@@ -1,10 +1,69 @@
 // File: lib/profile/help_center_screen.dart
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../sigma_theme.dart';
 import 'profile_screen.dart'; // IMPORT PROFILE UNTUK AKSES VARIABEL DARK MODE
 
 class HelpCenterScreen extends StatelessWidget {
   const HelpCenterScreen({super.key});
+
+  // Fungsi asinkronus untuk menghubungi admin via WhatsApp
+  Future<void> hubungiWhatsApp(BuildContext konteks) async {
+    final Uri tautanValid = Uri.parse('https://wa.me/6289691519694');
+    final penyajiPesan = ScaffoldMessenger.of(konteks);
+    try {
+      final bool apakahBisaBuka = await canLaunchUrl(tautanValid);
+      if (apakahBisaBuka) {
+        await launchUrl(tautanValid, mode: LaunchMode.externalApplication);
+      } else {
+        penyajiPesan.showSnackBar(
+          const SnackBar(
+            content: Text('Aplikasi WhatsApp tidak ditemukan.'),
+            backgroundColor: Colors.red,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } catch (e) {
+      debugPrint('Error launching WhatsApp: $e');
+      penyajiPesan.showSnackBar(
+        const SnackBar(
+          content: Text('Aplikasi WhatsApp tidak ditemukan.'),
+          backgroundColor: Colors.red,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
+  }
+
+  // Fungsi asinkronus untuk mengirim email bantuan
+  Future<void> kirimEmail(BuildContext konteks) async {
+    final Uri tautanValid = Uri.parse('mailto:contoh@email.com?subject=Bantuan%20SigmaHub');
+    final penyajiPesan = ScaffoldMessenger.of(konteks);
+    try {
+      final bool apakahBisaBuka = await canLaunchUrl(tautanValid);
+      if (apakahBisaBuka) {
+        await launchUrl(tautanValid, mode: LaunchMode.externalApplication);
+      } else {
+        penyajiPesan.showSnackBar(
+          const SnackBar(
+            content: Text('Aplikasi Email tidak ditemukan.'),
+            backgroundColor: Colors.red,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } catch (e) {
+      debugPrint('Error launching Email: $e');
+      penyajiPesan.showSnackBar(
+        const SnackBar(
+          content: Text('Aplikasi Email tidak ditemukan.'),
+          backgroundColor: Colors.red,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -38,9 +97,9 @@ class HelpCenterScreen extends StatelessWidget {
                 const SizedBox(height: 16),
                 Row(
                   children: [
-                    _buildContactButton(Icons.chat, 'WhatsApp', Colors.green, isDark),
+                    _buildContactButton(Icons.chat, 'WhatsApp', Colors.green, isDark, () => hubungiWhatsApp(context)),
                     const SizedBox(width: 10),
-                    _buildContactButton(Icons.mail, 'Email', WarnaSigma.emas, isDark),
+                    _buildContactButton(Icons.mail, 'Email', WarnaSigma.emas, isDark, () => kirimEmail(context)),
                   ],
                 ),
                 const SizedBox(height: 32),
@@ -59,21 +118,29 @@ class HelpCenterScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildContactButton(IconData icon, String label, Color color, bool isDark) {
+  Widget _buildContactButton(IconData icon, String label, Color color, bool isDark, VoidCallback onTap) {
     return Expanded(
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: isDark ? const Color(0xFF1E1E1E) : Colors.white, 
-          borderRadius: BorderRadius.circular(12), 
-          border: Border.all(color: isDark ? Colors.grey.shade800 : Colors.grey.shade200),
+      child: Card(
+        elevation: 0,
+        margin: EdgeInsets.zero,
+        color: isDark ? const Color(0xFF1E1E1E) : Colors.white,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+          side: BorderSide(color: isDark ? Colors.grey.shade800 : Colors.grey.shade200),
         ),
-        child: Column(
-          children: [
-            Icon(icon, color: color), 
-            const SizedBox(height: 8), 
-            Text(label, style: TextStyle(fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black))
-          ],
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(12),
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              children: [
+                Icon(icon, color: color), 
+                const SizedBox(height: 8), 
+                Text(label, style: TextStyle(fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black))
+              ],
+            ),
+          ),
         ),
       ),
     );
