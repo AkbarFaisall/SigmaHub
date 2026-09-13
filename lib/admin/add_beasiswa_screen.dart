@@ -33,11 +33,14 @@ class _AddBeasiswaScreenState extends State<AddBeasiswaScreen> {
   Uint8List? _fotoBannerBytes;
   String _logoUrl = '';
   String _fotoBannerUrl = '';
+  String? _namaFileLogo;
+  String? _namaFileBanner;
   
   // Status pengisian deskripsi dari halaman baru (Diubah menjadi Map agar menampung 3 data sekaligus)
   bool _deskripsiTerisi = false;
   Map<String, String> _deskripsiData = {
     'penyelenggara': '',
+    'negara': '',
     'deskripsi': '',
     'persyaratan': '',
   };
@@ -74,12 +77,25 @@ class _AddBeasiswaScreenState extends State<AddBeasiswaScreen> {
       _logoUrl = b['logoPenyelenggara'] ?? '';
       _fotoBannerUrl = b['fotoUtama'] ?? '';
       
+      if (_logoUrl.isNotEmpty) {
+        try {
+          _namaFileLogo = _logoUrl.split('?').first.split('/').last;
+        } catch (_) {}
+      }
+      if (_fotoBannerUrl.isNotEmpty) {
+        try {
+          _namaFileBanner = _fotoBannerUrl.split('?').first.split('/').last;
+        } catch (_) {}
+      }
+      
       _deskripsiData = {
         'penyelenggara': b['host'] ?? '',
+        'negara': b['country'] ?? '',
         'deskripsi': b['description'] ?? '',
         'persyaratan': b['requirements'] ?? '',
       };
       _deskripsiTerisi = _deskripsiData['penyelenggara']!.isNotEmpty && 
+                         _deskripsiData['negara']!.isNotEmpty && 
                          _deskripsiData['deskripsi']!.isNotEmpty && 
                          _deskripsiData['persyaratan']!.isNotEmpty;
     } else {
@@ -230,10 +246,10 @@ class _AddBeasiswaScreenState extends State<AddBeasiswaScreen> {
   }
 
   void _tampilkanKonfirmasiBuat(BuildContext context, bool modeGelap) {
-    final bool isEdit = widget.beasiswaUntukEdit != null;
+    final isEdit = widget.beasiswaUntukEdit != null;
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (dialogContext) => AlertDialog(
         backgroundColor: modeGelap ? const Color(0xFF1E1E1E) : Colors.white,
         title: Text(isEdit ? 'Konfirmasi Edit' : 'Konfirmasi', style: TextStyle(color: modeGelap ? Colors.white : Colors.black, fontWeight: FontWeight.bold)),
         content: Text(
@@ -244,7 +260,7 @@ class _AddBeasiswaScreenState extends State<AddBeasiswaScreen> {
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
+            onPressed: () => Navigator.pop(dialogContext),
             child: Text('Batal', style: TextStyle(color: modeGelap ? Colors.grey.shade400 : WarnaSigma.garisTepi)),
           ),
           ElevatedButton(
@@ -252,13 +268,13 @@ class _AddBeasiswaScreenState extends State<AddBeasiswaScreen> {
             onPressed: () async {
               final provider = Provider.of<ScholarshipProvider>(context, listen: false);
               final penyajiPesan = ScaffoldMessenger.of(context);
-              Navigator.pop(context); // Tutup dialog konfirmasi
+              Navigator.pop(dialogContext); // Tutup dialog konfirmasi
               
               // Tampilkan dialog proses
               showDialog(
                 context: context,
                 barrierDismissible: false,
-                builder: (context) => const Center(
+                builder: (loadingContext) => const Center(
                   child: CircularProgressIndicator(color: WarnaSigma.emas),
                 ),
               );
@@ -304,7 +320,7 @@ class _AddBeasiswaScreenState extends State<AddBeasiswaScreen> {
                 final data = {
                   'name': _namaController.text.trim(),
                   'host': _deskripsiData['penyelenggara'],
-                  'country': _wilayahTerpilih.isEmpty ? 'Indonesia' : _wilayahTerpilih.first,
+                  'country': _deskripsiData['negara']!.isEmpty ? 'Indonesia' : _deskripsiData['negara'],
                   'tags': tags,
                   'startDate': _tanggalBukaController.text.trim(),
                   'endDate': _tanggalTutupController.text.trim(),
@@ -568,6 +584,7 @@ class _AddBeasiswaScreenState extends State<AddBeasiswaScreen> {
                       _deskripsiData = hasil;
                       // Akan dianggap terisi jika Penyelenggara, Deskripsi, dan Persyaratan diisi
                       _deskripsiTerisi = _deskripsiData['penyelenggara']!.isNotEmpty && 
+                                         _deskripsiData['negara']!.isNotEmpty && 
                                          _deskripsiData['deskripsi']!.isNotEmpty && 
                                          _deskripsiData['persyaratan']!.isNotEmpty;
                     });
@@ -653,58 +670,13 @@ class _AddBeasiswaScreenState extends State<AddBeasiswaScreen> {
   );
 
   Widget _buildAreaLogo(bool modeGelap, Color warnaUtama, Color warnaPermukaan) {
-    Widget child;
     bool apakahAdaLogo = _logoBytes != null || _logoUrl.isNotEmpty;
-
-    if (_logoBytes != null) {
-      child = ClipRRect(
-        borderRadius: BorderRadius.circular(12),
-        child: Image.memory(_logoBytes!, fit: BoxFit.cover),
-      );
+    String teksDitampilkan = 'Tambahkan file';
+    if (_logoBytes != null && _namaFileLogo != null) {
+      teksDitampilkan = _namaFileLogo!;
     } else if (_logoUrl.isNotEmpty) {
-      child = ClipRRect(
-        borderRadius: BorderRadius.circular(12),
-        child: Image.network(
-          _logoUrl,
-          fit: BoxFit.cover,
-          errorBuilder: (context, _, __) => Image.asset(
-            'assets/images/default_logo.jpeg',
-            fit: BoxFit.cover,
-          ),
-        ),
-      );
-    } else {
-      // Fallback ke aset lokal default jika logo kosong/null
-      child = ClipRRect(
-        borderRadius: BorderRadius.circular(12),
-        child: Image.asset(
-          'assets/images/default_logo.jpeg',
-          fit: BoxFit.cover,
-        ),
-      );
+      teksDitampilkan = 'Logo tersimpan (URL)';
     }
-
-    final tumpukanGambar = Stack(
-      children: [
-        Positioned.fill(child: child),
-        Positioned(
-          bottom: 6,
-          right: 6,
-          child: Container(
-            padding: const EdgeInsets.all(6),
-            decoration: BoxDecoration(
-              color: Colors.black.withOpacity(0.55),
-              shape: BoxShape.circle,
-            ),
-            child: const Icon(
-              Icons.edit,
-              color: Colors.white,
-              size: 14,
-            ),
-          ),
-        ),
-      ],
-    );
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -712,22 +684,34 @@ class _AddBeasiswaScreenState extends State<AddBeasiswaScreen> {
         GestureDetector(
           onTap: () => _pilihSumberGambarBeasiswa(modeGelap, warnaUtama, true),
           child: Container(
-            width: 100,
-            height: 100,
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             decoration: BoxDecoration(
               color: warnaPermukaan,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: modeGelap ? Colors.grey.shade800 : Colors.grey.shade300),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: modeGelap ? Colors.grey.shade700 : Colors.grey.shade300),
             ),
-            child: tumpukanGambar,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.upload_file, color: modeGelap ? Colors.grey.shade400 : Colors.grey.shade600, size: 20),
+                const SizedBox(width: 8),
+                Flexible(
+                  child: Text(
+                    teksDitampilkan,
+                    style: TextStyle(color: modeGelap ? Colors.grey.shade300 : Colors.grey.shade700, fontSize: 14),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
         if (apakahAdaLogo) ...[
           const SizedBox(height: 8),
           TextButton.icon(
             onPressed: () => _hapusGambarBeasiswaDialog(true, modeGelap, warnaUtama),
-            icon: const Icon(Icons.delete, color: Colors.red, size: 18),
-            label: const Text('Hapus Logo', style: TextStyle(color: Colors.red, fontSize: 13)),
+            icon: const Icon(Icons.delete, color: Colors.red, size: 16),
+            label: const Text('Hapus Logo', style: TextStyle(color: Colors.red, fontSize: 12)),
           ),
         ]
       ],
@@ -735,64 +719,13 @@ class _AddBeasiswaScreenState extends State<AddBeasiswaScreen> {
   }
 
   Widget _buildAreaBanner(bool modeGelap, Color warnaUtama, Color warnaPermukaan) {
-    Widget child;
     bool apakahAdaBanner = _fotoBannerBytes != null || _fotoBannerUrl.isNotEmpty;
-
-    if (_fotoBannerBytes != null) {
-      child = ClipRRect(
-        borderRadius: BorderRadius.circular(12),
-        child: Image.memory(_fotoBannerBytes!, fit: BoxFit.cover, width: double.infinity, height: 160),
-      );
+    String teksDitampilkan = 'Tambahkan file';
+    if (_fotoBannerBytes != null && _namaFileBanner != null) {
+      teksDitampilkan = _namaFileBanner!;
     } else if (_fotoBannerUrl.isNotEmpty) {
-      child = ClipRRect(
-        borderRadius: BorderRadius.circular(12),
-        child: Image.network(
-          _fotoBannerUrl,
-          fit: BoxFit.cover,
-          width: double.infinity,
-          height: 160,
-          errorBuilder: (context, _, __) => Image.asset(
-            'assets/images/default_banner.jpeg',
-            fit: BoxFit.cover,
-            width: double.infinity,
-            height: 160,
-          ),
-        ),
-      );
-    } else {
-      // Fallback ke aset lokal default jika banner kosong/null
-      child = ClipRRect(
-        borderRadius: BorderRadius.circular(12),
-        child: Image.asset(
-          'assets/images/default_banner.jpeg',
-          fit: BoxFit.cover,
-          width: double.infinity,
-          height: 160,
-        ),
-      );
+      teksDitampilkan = 'Banner tersimpan (URL)';
     }
-
-    final tumpukanGambar = Stack(
-      children: [
-        Positioned.fill(child: child),
-        Positioned(
-          bottom: 10,
-          right: 10,
-          child: Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: Colors.black.withOpacity(0.55),
-              shape: BoxShape.circle,
-            ),
-            child: const Icon(
-              Icons.camera_alt,
-              color: Colors.white,
-              size: 18,
-            ),
-          ),
-        ),
-      ],
-    );
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -800,22 +733,34 @@ class _AddBeasiswaScreenState extends State<AddBeasiswaScreen> {
         GestureDetector(
           onTap: () => _pilihSumberGambarBeasiswa(modeGelap, warnaUtama, false),
           child: Container(
-            width: double.infinity,
-            height: 160,
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             decoration: BoxDecoration(
               color: warnaPermukaan,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: modeGelap ? Colors.grey.shade800 : Colors.grey.shade300),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: modeGelap ? Colors.grey.shade700 : Colors.grey.shade300),
             ),
-            child: tumpukanGambar,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.upload_file, color: modeGelap ? Colors.grey.shade400 : Colors.grey.shade600, size: 20),
+                const SizedBox(width: 8),
+                Flexible(
+                  child: Text(
+                    teksDitampilkan,
+                    style: TextStyle(color: modeGelap ? Colors.grey.shade300 : Colors.grey.shade700, fontSize: 14),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
         if (apakahAdaBanner) ...[
           const SizedBox(height: 8),
           TextButton.icon(
             onPressed: () => _hapusGambarBeasiswaDialog(false, modeGelap, warnaUtama),
-            icon: const Icon(Icons.delete, color: Colors.red, size: 18),
-            label: const Text('Hapus Foto Banner', style: TextStyle(color: Colors.red, fontSize: 13)),
+            icon: const Icon(Icons.delete, color: Colors.red, size: 16),
+            label: const Text('Hapus Foto Banner', style: TextStyle(color: Colors.red, fontSize: 12)),
           ),
         ]
       ],
@@ -825,7 +770,7 @@ class _AddBeasiswaScreenState extends State<AddBeasiswaScreen> {
   void _hapusGambarBeasiswaDialog(bool isLogo, bool modeGelap, Color warnaUtama) {
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (dialogContext) => AlertDialog(
         backgroundColor: modeGelap ? const Color(0xFF1E1E1E) : Colors.white,
         title: Text(isLogo ? 'Hapus Logo?' : 'Hapus Banner?', style: TextStyle(color: modeGelap ? Colors.white : Colors.black, fontWeight: FontWeight.bold)),
         content: Text(
@@ -836,7 +781,7 @@ class _AddBeasiswaScreenState extends State<AddBeasiswaScreen> {
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
+            onPressed: () => Navigator.pop(dialogContext),
             child: Text('Batal', style: TextStyle(color: modeGelap ? Colors.grey.shade400 : WarnaSigma.garisTepi)),
           ),
           ElevatedButton(
@@ -844,7 +789,7 @@ class _AddBeasiswaScreenState extends State<AddBeasiswaScreen> {
             onPressed: () async {
               final provider = Provider.of<ScholarshipProvider>(context, listen: false);
               final penyajiPesan = ScaffoldMessenger.of(context);
-              Navigator.pop(context); // Tutup dialog konfirmasi
+              Navigator.pop(dialogContext); // Tutup dialog konfirmasi
               
               // Jika ini mode Edit (beasiswa terdaftar di database), panggil provider untuk menghapus di storage & online database
               if (widget.beasiswaUntukEdit != null) {
@@ -853,7 +798,7 @@ class _AddBeasiswaScreenState extends State<AddBeasiswaScreen> {
                 showDialog(
                   context: context,
                   barrierDismissible: false,
-                  builder: (context) => const Center(
+                  builder: (loadingContext) => const Center(
                     child: CircularProgressIndicator(color: WarnaSigma.emas),
                   ),
                 );
@@ -877,9 +822,11 @@ class _AddBeasiswaScreenState extends State<AddBeasiswaScreen> {
                 if (isLogo) {
                   _logoBytes = null;
                   _logoUrl = '';
+                  _namaFileLogo = null;
                 } else {
                   _fotoBannerBytes = null;
                   _fotoBannerUrl = '';
+                  _namaFileBanner = null;
                 }
               });
 
@@ -946,8 +893,10 @@ class _AddBeasiswaScreenState extends State<AddBeasiswaScreen> {
         setState(() {
           if (isLogo) {
             _logoBytes = dataByte;
+            _namaFileLogo = berkasFoto.name;
           } else {
             _fotoBannerBytes = dataByte;
+            _namaFileBanner = berkasFoto.name;
           }
         });
       }
@@ -972,6 +921,7 @@ class AddDescriptionScreen extends StatefulWidget {
 
 class _AddDescriptionScreenState extends State<AddDescriptionScreen> {
   late TextEditingController _penyelenggaraController;
+  late TextEditingController _negaraController;
   late TextEditingController _deskripsiController;
   late TextEditingController _persyaratanController;
 
@@ -979,6 +929,7 @@ class _AddDescriptionScreenState extends State<AddDescriptionScreen> {
   void initState() {
     super.initState();
     _penyelenggaraController = TextEditingController(text: widget.dataAwal['penyelenggara']);
+    _negaraController = TextEditingController(text: widget.dataAwal['negara'] ?? '');
     _deskripsiController = TextEditingController(text: widget.dataAwal['deskripsi']);
     _persyaratanController = TextEditingController(text: widget.dataAwal['persyaratan']);
   }
@@ -986,6 +937,7 @@ class _AddDescriptionScreenState extends State<AddDescriptionScreen> {
   @override
   void dispose() {
     _penyelenggaraController.dispose();
+    _negaraController.dispose();
     _deskripsiController.dispose();
     _persyaratanController.dispose();
     super.dispose();
@@ -1011,6 +963,7 @@ class _AddDescriptionScreenState extends State<AddDescriptionScreen> {
               onPressed: () {
                 Navigator.pop(context, {
                   'penyelenggara': _penyelenggaraController.text,
+                  'negara': _negaraController.text,
                   'deskripsi': _deskripsiController.text,
                   'persyaratan': _persyaratanController.text,
                 });
@@ -1074,6 +1027,39 @@ class _AddDescriptionScreenState extends State<AddDescriptionScreen> {
                         decoration: InputDecoration(
                           prefixIcon: Icon(Icons.corporate_fare, color: modeGelap ? Colors.grey.shade500 : Colors.grey),
                           hintText: 'Contoh: Yayasan Pendidikan Global',
+                          hintStyle: TextStyle(color: modeGelap ? Colors.grey.shade600 : Colors.grey.shade400),
+                          filled: true,
+                          fillColor: warnaPermukaan,
+                          contentPadding: const EdgeInsets.symmetric(vertical: 14),
+                          enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: warnaGaris)),
+                          focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: warnaUtama, width: 2)),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+
+                // Kartu Tambahan: Negara Penyelenggara
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  margin: const EdgeInsets.only(bottom: 24),
+                  decoration: BoxDecoration(
+                    color: warnaPermukaan,
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: warnaGaris),
+                    boxShadow: modeGelap ? [] : [const BoxShadow(color: Color(0x0F006400), blurRadius: 12, offset: Offset(0, 4))],
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('Negara Penyelenggara', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: modeGelap ? Colors.white : Colors.grey.shade600)),
+                      const SizedBox(height: 8),
+                      TextField(
+                        controller: _negaraController,
+                        style: TextStyle(color: modeGelap ? Colors.white : Colors.black),
+                        decoration: InputDecoration(
+                          prefixIcon: Icon(Icons.public, color: modeGelap ? Colors.grey.shade500 : Colors.grey),
+                          hintText: 'Contoh: Indonesia, Inggris, dll',
                           hintStyle: TextStyle(color: modeGelap ? Colors.grey.shade600 : Colors.grey.shade400),
                           filled: true,
                           fillColor: warnaPermukaan,
@@ -1194,12 +1180,37 @@ class _AddDescriptionScreenState extends State<AddDescriptionScreen> {
                       elevation: 0,
                     ),
                     onPressed: () {
-                      // Mengembalikan data Map ke halaman sebelumnya
-                      Navigator.pop(context, {
-                        'penyelenggara': _penyelenggaraController.text,
-                        'deskripsi': _deskripsiController.text,
-                        'persyaratan': _persyaratanController.text,
-                      });
+                      showDialog(
+                        context: context,
+                        builder: (dialogContext) => AlertDialog(
+                          backgroundColor: modeGelap ? const Color(0xFF1E1E1E) : Colors.white,
+                          title: Text('Simpan Detail?', style: TextStyle(color: modeGelap ? Colors.white : Colors.black, fontWeight: FontWeight.bold)),
+                          content: Text(
+                            'Apakah Anda yakin ingin menyimpan detail & persyaratan beasiswa ini?',
+                            style: TextStyle(color: modeGelap ? Colors.grey.shade300 : Colors.black87),
+                          ),
+                          actions: [
+                            TextButton(
+                              onPressed: () => Navigator.pop(dialogContext),
+                              child: Text('Batal', style: TextStyle(color: modeGelap ? Colors.grey.shade400 : WarnaSigma.garisTepi)),
+                            ),
+                            ElevatedButton(
+                              style: ElevatedButton.styleFrom(backgroundColor: WarnaSigma.emas),
+                              onPressed: () {
+                                Navigator.pop(dialogContext); // Tutup popup konfirmasi
+                                // Mengembalikan data Map ke halaman sebelumnya
+                                Navigator.pop(context, {
+                                  'penyelenggara': _penyelenggaraController.text,
+                                  'negara': _negaraController.text,
+                                  'deskripsi': _deskripsiController.text,
+                                  'persyaratan': _persyaratanController.text,
+                                });
+                              },
+                              child: const Text('Ya, Simpan', style: TextStyle(color: WarnaSigma.utama, fontWeight: FontWeight.bold)),
+                            ),
+                          ],
+                        ),
+                      );
                     },
                     child: const Row(
                       mainAxisAlignment: MainAxisAlignment.center,

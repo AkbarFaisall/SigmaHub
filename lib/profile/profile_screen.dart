@@ -8,6 +8,7 @@ import '../sigma_theme.dart';
 import '../home_screen.dart';
 import '../bookmark_screen.dart';
 import '../providers/profile_provider.dart';
+import '../login/login_screen.dart';
 
 // Variabel Global untuk mengontrol Mode Gelap di seluruh aplikasi
 final ValueNotifier<bool> globalDarkModeNotifier = ValueNotifier(false);
@@ -42,6 +43,31 @@ class _ProfileScreenState extends State<ProfileScreen> {
         Navigator.pushReplacementNamed(context, '/login');
       }
     }
+  }
+
+  void _tampilkanKonfirmasiKeluar(bool isDark) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: isDark ? const Color(0xFF1E1E1E) : Colors.white,
+        title: Text('Keluar Akun?', style: TextStyle(color: isDark ? Colors.white : Colors.black, fontWeight: FontWeight.bold)),
+        content: Text('Apakah Anda yakin ingin keluar dari akun ini?', style: TextStyle(color: isDark ? Colors.grey.shade300 : Colors.black87)),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text('Batal', style: TextStyle(color: isDark ? Colors.grey.shade400 : Colors.grey)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: WarnaSigma.peringatan),
+            onPressed: () {
+              Navigator.pop(context);
+              prosesKeluar();
+            },
+            child: const Text('Keluar', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
   }
   Widget _buildAvatar(String avatarUrl, String name, double radius, double fontSize, Color primaryWarna, bool isDark) {
     if (avatarUrl.isNotEmpty) {
@@ -84,6 +110,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         // WARNA UTAMA DINAMIS
         Color primaryWarna = isDark ? Colors.green.shade400 : WarnaSigma.utama;
         final profileProv = Provider.of<ProfileProvider>(context);
+        final bool isGuest = Supabase.instance.client.auth.currentUser == null;
 
         // Bagian Atas (Kartu Informasi Pengguna)
         Widget kartuProfil = Card(
@@ -110,8 +137,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     ),
                   ),
                   child: _buildAvatar(
-                    profileProv.avatarUrl,
-                    profileProv.name,
+                    isGuest ? '' : profileProv.avatarUrl,
+                    isGuest ? 'Tamu' : profileProv.name,
                     36,
                     32,
                     primaryWarna,
@@ -125,7 +152,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        profileProv.name,
+                        isGuest ? "Akun Tamu" : profileProv.name,
                         style: TextStyle(
                           fontSize: 18,
                           fontWeight: FontWeight.bold,
@@ -134,36 +161,38 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        profileProv.university,
+                        isGuest ? "Silakan masuk untuk akses penuh" : profileProv.email,
                         style: TextStyle(
                           fontSize: 13,
                           color: isDark ? Colors.grey.shade300 : Colors.black87,
                         ),
                       ),
-                      const SizedBox(height: 2),
-                      Text(
-                        profileProv.major,
-                        style: TextStyle(
-                          fontSize: 13,
-                          color: isDark ? Colors.grey.shade400 : WarnaSigma.garisTepi,
+                      if (!isGuest) ...[
+                        const SizedBox(height: 2),
+                        Text(
+                          profileProv.university,
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: isDark ? Colors.grey.shade400 : WarnaSigma.garisTepi,
+                          ),
                         ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        profileProv.email,
-                        style: TextStyle(
-                          fontSize: 11,
-                          color: isDark ? Colors.grey.shade500 : WarnaSigma.garisTepi,
+                        const SizedBox(height: 2),
+                        Text(
+                          profileProv.major,
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: isDark ? Colors.grey.shade400 : WarnaSigma.garisTepi,
+                          ),
                         ),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        profileProv.phone,
-                        style: TextStyle(
-                          fontSize: 11,
-                          color: isDark ? Colors.grey.shade500 : WarnaSigma.garisTepi,
+                        const SizedBox(height: 4),
+                        Text(
+                          profileProv.phone,
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: isDark ? Colors.grey.shade500 : WarnaSigma.garisTepi,
+                          ),
                         ),
-                      ),
+                      ],
                     ],
                   ),
                 ),
@@ -206,26 +235,41 @@ class _ProfileScreenState extends State<ProfileScreen> {
               
               OutlinedButton.icon(
                 style: OutlinedButton.styleFrom(
-                  foregroundColor: WarnaSigma.peringatan,
-                  side: const BorderSide(color: WarnaSigma.peringatan),
+                  foregroundColor: isGuest ? primaryWarna : WarnaSigma.peringatan,
+                  side: BorderSide(color: isGuest ? primaryWarna : WarnaSigma.peringatan),
                   padding: const EdgeInsets.symmetric(vertical: 16),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12),
                   ),
                 ),
-                onPressed: sedangProsesKeluar ? null : prosesKeluar,
+                onPressed: sedangProsesKeluar 
+                    ? null 
+                    : () {
+                        if (isGuest) {
+                          Navigator.pushReplacement(
+                            context,
+                            PageRouteBuilder(
+                              pageBuilder: (context, a1, a2) => const LoginScreen(),
+                              transitionDuration: Duration.zero,
+                              reverseTransitionDuration: Duration.zero,
+                            ),
+                          );
+                        } else {
+                          _tampilkanKonfirmasiKeluar(isDark);
+                        }
+                      },
                 icon: sedangProsesKeluar
-                    ? const SizedBox(
+                    ? SizedBox(
                         width: 18,
                         height: 18,
                         child: CircularProgressIndicator(
                           strokeWidth: 2,
-                          color: WarnaSigma.peringatan,
+                          color: isGuest ? primaryWarna : WarnaSigma.peringatan,
                         ),
                       )
-                    : const Icon(Icons.logout),
+                    : Icon(isGuest ? Icons.login : Icons.logout),
                 label: Text(
-                  sedangProsesKeluar ? 'Mengeluarkan...' : 'Keluar',
+                  sedangProsesKeluar ? 'Memproses...' : (isGuest ? 'Masuk / Daftar' : 'Keluar'),
                   style: const TextStyle(fontWeight: FontWeight.bold),
                 ),
               ),
@@ -277,7 +321,44 @@ class _ProfileScreenState extends State<ProfileScreen> {
         title: Text(title, style: TextStyle(color: isDark ? Colors.white : Colors.black)),
         trailing: Icon(Icons.chevron_right, color: isDark ? Colors.grey.shade500 : WarnaSigma.garisTepi),
         onTap: () {
-          Navigator.pushNamed(context, route); 
+          final isGuest = Supabase.instance.client.auth.currentUser == null;
+          if (isGuest && route != '/about' && route != '/help') {
+            showDialog(
+              context: context,
+              builder: (context) => AlertDialog(
+                title: const Text('Akses Dibatasi'),
+                content: const Text('Silakan masuk atau daftar terlebih dahulu untuk mengakses menu ini.'),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(context),
+                    child: const Text('Batal', style: TextStyle(color: Colors.grey)),
+                  ),
+                  ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: WarnaSigma.utama,
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    ),
+                    onPressed: () {
+                      Navigator.pop(context); // Tutup dialog
+                      Navigator.pushReplacement(
+                        context,
+                        PageRouteBuilder(
+                          pageBuilder: (context, a1, a2) => const LoginScreen(),
+                          transitionDuration: Duration.zero,
+                          reverseTransitionDuration: Duration.zero,
+                        ),
+                      );
+                    },
+                    child: const Text('Masuk'),
+                  ),
+                ],
+              ),
+            );
+          } else {
+            Navigator.pushNamed(context, route); 
+          }
         },
       ),
     );

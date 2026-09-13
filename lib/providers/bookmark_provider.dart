@@ -5,6 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../main.dart'; 
 import '../supabase_config.dart';
+import '../services/notification_service.dart';
 
 class BookmarkProvider with ChangeNotifier {
   List<Map<String, dynamic>> _bookmarkedItems = [];
@@ -146,11 +147,35 @@ class BookmarkProvider with ChangeNotifier {
 
     if (exist) {
       _bookmarkedItems.removeWhere((e) => e['name'] == name);
+      // Batalkan alarm lokal (gunakan ID integer. Jika string, fallback ke hashcode)
+      final idBeasiswa = item['id'] is int ? item['id'] as int : item['id'].hashCode;
+      NotificationService().batalkanPengingat(idBeasiswa);
     } else {
       // Pastikan membersihkan instansi IconData sebelum disimpan
       final cleanItem = Map<String, dynamic>.from(item);
       cleanItem.remove('icon');
       _bookmarkedItems.add(cleanItem);
+
+      // Cek apakah notifikasi deadline aktif di SharedPreferences
+      final sp = await SharedPreferences.getInstance();
+      final bool notifDeadline = sp.getBool('notif_deadline') ?? true;
+      final int hMinus = sp.getInt('notif_h_minus') ?? 1;
+
+      if (notifDeadline) {
+        final idBeasiswa = item['id'] is int ? item['id'] as int : item['id'].hashCode;
+        final endDateStr = item['endDate'] ?? item['closingDate'];
+        if (endDateStr != null) {
+          final parsedDate = _parseIndonesianDate(endDateStr.toString());
+          if (parsedDate != null) {
+            NotificationService().jadwalkanPengingatDeadline(
+              idBeasiswa: idBeasiswa,
+              namaBeasiswa: name ?? 'Beasiswa',
+              waktuPenutupan: parsedDate,
+              hMinus: hMinus,
+            );
+          }
+        }
+      }
     }
 
     _syncToLegacyGlobal();
@@ -183,5 +208,36 @@ class BookmarkProvider with ChangeNotifier {
         debugPrint('Gagal sinkronisasi bookmark ke Supabase: $e');
       }
     }
+  }
+
+  /// Helper untuk mem-parsing string tanggal "31 Ags 2024" atau "31 Agustus 2024" ke DateTime
+  DateTime? _parseIndonesianDate(String dateStr) {
+    final monthMap = {
+      'jan': 1, 'januari': 1,
+      'feb': 2, 'februari': 2,
+      'mar': 3, 'maret': 3,
+      'apr': 4, 'april': 4,
+      'mei': 5,
+      'jun': 6, 'juni': 6,
+      'jul': 7, 'juli': 7,
+      'ags': 8, 'agustus': 8,
+      'sep': 9, 'september': 9,
+      'okt': 10, 'oktober': 10,
+      'nov': 11, 'november': 11,
+      'des': 12, 'desember': 12,
+    };
+    try {
+      final parts = dateStr.trim().split(' ');
+      if (parts.length >= 3) {
+        final day = int.parse(parts[0]);
+        final monthStr = parts[1].toLowerCase();
+        final year = int.parse(parts[2]);
+        final month = monthMap[monthStr] ?? 1;
+        return DateTime(year, month, day);
+      }
+    } catch(e) {
+      debugPrint('Gagal parsing tanggal deadline: $e');
+    }
+    return null;
   }
 }

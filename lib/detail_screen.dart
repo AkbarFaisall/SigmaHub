@@ -1,16 +1,39 @@
 // File: lib/detail_screen.dart
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'sigma_theme.dart';
 import 'profile/profile_screen.dart'; // IMPORT PROFILE UNTUK AKSES VARIABEL DARK MODE
 
-class DetailScreen extends StatelessWidget {
-  final Map<String, dynamic> beasiswa;
+import 'package:provider/provider.dart';
+import 'providers/scholarship_provider.dart';
 
-  const DetailScreen({super.key, required this.beasiswa});
+class DetailScreen extends StatefulWidget {
+  final Map<String, dynamic> beasiswa;
+  final bool isAdmin;
+
+  const DetailScreen({super.key, required this.beasiswa, this.isAdmin = false});
+
+  @override
+  State<DetailScreen> createState() => _DetailScreenState();
+}
+
+class _DetailScreenState extends State<DetailScreen> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!widget.isAdmin) {
+        final provider = Provider.of<ScholarshipProvider>(context, listen: false);
+        final int currentViews = widget.beasiswa['views'] ?? 0;
+        provider.incrementViews(widget.beasiswa['id'], currentViews);
+      }
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
+    final beasiswa = widget.beasiswa;
     return ValueListenableBuilder<bool>(
       valueListenable: globalDarkModeNotifier,
       builder: (context, isDark, child) {
@@ -53,6 +76,41 @@ class DetailScreen extends StatelessWidget {
                             ),
                           ),
                         ),
+                        Positioned(
+                          top: 50,
+                          right: 20,
+                          child: GestureDetector(
+                            onTap: () {
+                              final link = beasiswa['link'] ?? '';
+                              if (link.isNotEmpty) {
+                                Clipboard.setData(ClipboardData(text: link));
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text('Tautan beasiswa berhasil disalin!'),
+                                    backgroundColor: Colors.green,
+                                    behavior: SnackBarBehavior.floating,
+                                  ),
+                                );
+                              } else {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text('Tautan beasiswa belum tersedia.'),
+                                    backgroundColor: Colors.orange,
+                                    behavior: SnackBarBehavior.floating,
+                                  ),
+                                );
+                              }
+                            },
+                            child: Container(
+                              padding: const EdgeInsets.all(10),
+                              decoration: BoxDecoration(
+                                color: isDark ? const Color(0xFF1E1E1E).withOpacity(0.8) : Colors.white.withOpacity(0.8),
+                                shape: BoxShape.circle,
+                              ),
+                              child: Icon(Icons.share, color: isDark ? Colors.white : Colors.black),
+                            ),
+                          ),
+                        ),
                       ],
                     ),
 
@@ -61,14 +119,43 @@ class DetailScreen extends StatelessWidget {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          // 2. Judul Beasiswa
-                          Text(
-                            beasiswa['name'] ?? 'Nama Beasiswa Tidak Tersedia',
-                            style: TextStyle(
-                              fontSize: 22,
-                              fontWeight: FontWeight.bold,
-                              color: primaryWarna,
-                            ),
+                          // 2. Judul Beasiswa dan Views
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  beasiswa['name'] ?? 'Nama Beasiswa Tidak Tersedia',
+                                  style: TextStyle(
+                                    fontSize: 22,
+                                    fontWeight: FontWeight.bold,
+                                    color: primaryWarna,
+                                  ),
+                                ),
+                              ),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                decoration: BoxDecoration(
+                                  color: isDark ? const Color(0xFF2A2612) : const Color(0xFFFFF9E6),
+                                  borderRadius: BorderRadius.circular(20),
+                                  border: Border.all(color: WarnaSigma.emas.withOpacity(0.5)),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    const Icon(Icons.remove_red_eye, size: 16, color: WarnaSigma.emas),
+                                    const SizedBox(width: 4),
+                                    Text(
+                                      '${beasiswa['views'] ?? 0}',
+                                      style: TextStyle(
+                                        color: isDark ? Colors.white : Colors.black87,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
                           ),
                           const SizedBox(height: 20),
 
@@ -85,10 +172,18 @@ class DetailScreen extends StatelessWidget {
                           _buildMetadataCard(
                             icon: Icons.account_balance,
                             label: 'PENYELENGGARA',
-                            // PERUBAHAN: Menghapus titik dan menggunakan \n agar negara pindah ke baris bawah
-                            value: '${beasiswa['host'] ?? 'TBA'}\n${beasiswa['country'] ?? 'Indonesia'}',
-                            bgColor: isDark ? const Color(0xFF1A222C) : const Color(0xFFF5F9FF), // Biru gelap untuk dark mode
+                            value: beasiswa['host'] ?? 'TBA',
+                            bgColor: isDark ? const Color(0xFF1A222C) : const Color(0xFFF5F9FF),
                             iconColor: Colors.blue,
+                            isDark: isDark,
+                          ),
+                          const SizedBox(height: 12),
+                          _buildMetadataCard(
+                            icon: Icons.public,
+                            label: 'NEGARA',
+                            value: beasiswa['country'] ?? 'Indonesia',
+                            bgColor: isDark ? const Color(0xFF2D1B2E) : const Color(0xFFFFF5F8),
+                            iconColor: Colors.purple,
                             isDark: isDark,
                           ),
                           const SizedBox(height: 20),
@@ -174,7 +269,7 @@ class DetailScreen extends StatelessWidget {
   }
 
   // Widget Pembantu untuk Kartu Bento Metadata
-  Widget _buildMetadataCard({required IconData icon, required String label, required String value, required Color bgColor, required Color iconColor, required bool isDark}) {
+  Widget _buildMetadataCard({required IconData icon, required String label, required String value, String? subValue, required Color bgColor, required Color iconColor, required bool isDark}) {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -196,6 +291,8 @@ class DetailScreen extends StatelessWidget {
               children: [
                 Text(label, style: TextStyle(fontSize: 10, color: isDark ? Colors.grey.shade400 : Colors.grey.shade600, fontWeight: FontWeight.bold)),
                 Text(value, style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black)),
+                if (subValue != null && subValue.isNotEmpty)
+                  Text(subValue, style: TextStyle(fontSize: 13, color: isDark ? Colors.grey.shade300 : Colors.black87)),
               ],
             ),
           ),
@@ -270,7 +367,7 @@ class DetailScreen extends StatelessWidget {
             style: ElevatedButton.styleFrom(backgroundColor: WarnaSigma.emas),
             onPressed: () {
               Navigator.pop(context); 
-              bukaTautan(beasiswa['link'], context);
+              bukaTautan(widget.beasiswa['link'], context);
             }, 
             child: const Text('Lanjutkan', style: TextStyle(color: WarnaSigma.utama))
           ),

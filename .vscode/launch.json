@@ -1,0 +1,30 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Flutter: Run sigma_gravity_app",
+      "request": "launch",
+      "type": "dart",
+      "program": "lib/main.dart"
+    },
+    {
+      "name": "C/C++ Runner: Debug Session",
+      "type": "cppdbg",
+      "request": "launch",
+      "args": [],
+      "stopAtEntry": false,
+      "externalConsole": true,
+      "cwd": "d:/UIN/TI/semester_4/Pemrograman_Perangkat_Mobile/Praktikum/project_final/sigma_gravity/sigma_gravity_app/windows/flutter",
+      "program": "d:/UIN/TI/semester_4/Pemrograman_Perangkat_Mobile/Praktikum/project_final/sigma_gravity/sigma_gravity_app/windows/flutter/build/Debug/outDebug",
+      "MIMode": "gdb",
+      "miDebuggerPath": "gdb",
+      "setupCommands": [
+        {
+          "description": "Enable pretty-printing for gdb",
+          "text": "-enable-pretty-printing",
+          "ignoreFailures": true
+        }
+      ]
+    }
+  ]
+}

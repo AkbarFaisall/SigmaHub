@@ -1,11 +1,10 @@
 // File: lib/admin/admin_dashboard_screen.dart
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 import '../sigma_theme.dart';
 import '../profile/profile_screen.dart'; 
-import '../login/login_screen.dart'; 
 import 'add_beasiswa_screen.dart'; 
+import 'admin_drawer.dart';
 import '../detail_screen.dart';
 import '../providers/scholarship_provider.dart';
 import '../providers/bookmark_provider.dart';
@@ -19,64 +18,59 @@ class AdminDashboardScreen extends StatefulWidget {
 
 class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   int _kategoriAktif = 0; // 0: Semua, 1: Prestasi, 2: Umum
-  bool sedangProsesKeluar = false;
-
-  // Fungsi untuk memutus sesi admin dan kembali ke login
-  Future<void> prosesKeluar() async {
-    setState(() {
-      sedangProsesKeluar = true;
-    });
-
-    try {
-      // Putus sesi autentikasi Supabase secara resmi
-      await Supabase.instance.client.auth.signOut();
-    } catch (e) {
-      debugPrint('Error saat keluar admin: $e');
-    } finally {
-      if (mounted) {
-        setState(() {
-          sedangProsesKeluar = false;
-        });
-
-        // Hapus seluruh tumpukan halaman dan arahkan kembali ke LoginScreen
-        Navigator.pushAndRemoveUntil(
-          context,
-          PageRouteBuilder(
-            pageBuilder: (context, a1, a2) => const LoginScreen(),
-            transitionDuration: Duration.zero,
-            reverseTransitionDuration: Duration.zero,
-          ),
-          (route) => false,
-        );
-      }
-    }
-  }
+  String _searchQuery = '';
 
   void _tampilkanKonfirmasiHapus(BuildContext context, dynamic id, String name, bool isDark, Color primaryWarna) {
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (dialogContext) => AlertDialog(
         backgroundColor: isDark ? const Color(0xFF1E1E1E) : Colors.white,
         title: Text('Hapus Beasiswa?', style: TextStyle(color: isDark ? Colors.white : Colors.black, fontWeight: FontWeight.bold)),
         content: Text('Apakah Anda yakin ingin menghapus beasiswa "$name"? Tindakan ini tidak dapat dibatalkan.', style: TextStyle(color: isDark ? Colors.grey.shade300 : Colors.black87)),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
+            onPressed: () => Navigator.pop(dialogContext),
             child: Text('Batal', style: TextStyle(color: isDark ? Colors.grey.shade400 : WarnaSigma.garisTepi)),
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
             onPressed: () async {
-              Navigator.pop(context);
-              await Provider.of<ScholarshipProvider>(context, listen: false).deleteScholarship(id);
-              if (context.mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text('Beasiswa "$name" berhasil dihapus!'),
-                    backgroundColor: Colors.red.shade700,
-                    behavior: SnackBarBehavior.floating,
-                  ),
-                );
+              final scaffoldMessenger = ScaffoldMessenger.of(context);
+              final provider = Provider.of<ScholarshipProvider>(context, listen: false);
+              Navigator.pop(dialogContext); // Tutup dialog konfirmasi
+              
+              // Tampilkan dialog loading
+              showDialog(
+                context: context,
+                barrierDismissible: false,
+                builder: (loadingContext) => const Center(
+                  child: CircularProgressIndicator(color: WarnaSigma.emas),
+                ),
+              );
+
+              try {
+                await provider.deleteScholarship(id);
+                if (context.mounted) {
+                  Navigator.pop(context); // Tutup loading
+                  scaffoldMessenger.showSnackBar(
+                    SnackBar(
+                      content: Text('Beasiswa "$name" berhasil dihapus!'),
+                      backgroundColor: Colors.green.shade700,
+                      behavior: SnackBarBehavior.floating,
+                    ),
+                  );
+                }
+              } catch (e) {
+                if (context.mounted) {
+                  Navigator.pop(context); // Tutup loading
+                  scaffoldMessenger.showSnackBar(
+                    SnackBar(
+                      content: Text('Gagal menghapus beasiswa: $e'),
+                      backgroundColor: Colors.red.shade700,
+                      behavior: SnackBarBehavior.floating,
+                    ),
+                  );
+                }
               }
             },
             child: const Text('Hapus', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
@@ -91,15 +85,30 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     final scholarshipProv = Provider.of<ScholarshipProvider>(context);
     final listBeasiswa = scholarshipProv.scholarships;
     
-    // Filter berdasarkan kategori tab admin
+    // Filter berdasarkan kategori tab admin & pencarian
     final beasiswaTampil = listBeasiswa.where((item) {
-      if (_kategoriAktif == 1) return item['type'] == 'Prestasi';
-      if (_kategoriAktif == 2) return item['type'] == 'Umum';
-      return true;
+      bool cocokKategori = true;
+      if (_kategoriAktif == 1) cocokKategori = item['type'] == 'Prestasi';
+      if (_kategoriAktif == 2) cocokKategori = item['type'] == 'Umum';
+      
+      bool cocokPencarian = true;
+      if (_searchQuery.isNotEmpty) {
+        String query = _searchQuery.toLowerCase();
+        String nama = (item['name'] ?? '').toString().toLowerCase();
+        String host = (item['host'] ?? '').toString().toLowerCase();
+        cocokPencarian = nama.contains(query) || host.contains(query);
+      }
+      return cocokKategori && cocokPencarian;
     }).toList();
 
     // Hitung total bookmarks dari bookmark provider
     final totalBookmarks = Provider.of<BookmarkProvider>(context).bookmarkedItems.length;
+
+    // Hitung total views
+    int totalViews = 0;
+    for (var b in listBeasiswa) {
+      totalViews += (b['views'] as int?) ?? 0;
+    }
 
     return ValueListenableBuilder<bool>(
       valueListenable: globalDarkModeNotifier,
@@ -114,54 +123,35 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
             backgroundColor: surfaceWarna,
             elevation: 0,
             iconTheme: IconThemeData(color: isDark ? Colors.white : Colors.black),
-            title: Row(
-              children: [
-                CircleAvatar(
-                  radius: 16,
-                  backgroundColor: primaryWarna,
-                  child: const Text('A', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
-                ),
-                const SizedBox(width: 12),
-                Text('Admin Dashboard', style: TextStyle(color: primaryWarna, fontWeight: FontWeight.bold, fontSize: 18)),
-              ],
-            ),
+            title: Text('Admin Dashboard', style: TextStyle(color: primaryWarna, fontWeight: FontWeight.bold, fontSize: 18)),
           ),
-          drawer: _buildDrawer(context, isDark, primaryWarna),
-          body: ListView(
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+          drawer: const AdminDrawer(activeRoute: 'beasiswa'),
+          body: Column(
             children: [
-              // Search Bar
-              TextField(
-                style: TextStyle(color: isDark ? Colors.white : Colors.black),
-                decoration: InputDecoration(
-                  hintText: 'Cari beasiswa...',
-                  hintStyle: TextStyle(color: isDark ? Colors.grey.shade500 : Colors.grey.shade400),
-                  prefixIcon: Icon(Icons.search, color: isDark ? Colors.grey.shade500 : Colors.grey),
-                  filled: true,
-                  fillColor: surfaceWarna,
-                  contentPadding: const EdgeInsets.symmetric(vertical: 16),
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(99), borderSide: BorderSide.none),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
+                child: TextField(
+                  onChanged: (val) => setState(() => _searchQuery = val),
+                  style: TextStyle(color: isDark ? Colors.white : Colors.black),
+                  decoration: InputDecoration(
+                    hintText: 'Cari beasiswa...',
+                    hintStyle: TextStyle(color: isDark ? Colors.grey.shade500 : Colors.grey.shade400),
+                    prefixIcon: Icon(Icons.search, color: isDark ? Colors.grey.shade500 : Colors.grey),
+                    filled: true,
+                    fillColor: surfaceWarna,
+                    contentPadding: const EdgeInsets.symmetric(vertical: 16),
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(99), borderSide: BorderSide.none),
+                  ),
                 ),
               ),
-              const SizedBox(height: 24),
-              
-              // Kategori Beasiswa
-              Text('KATEGORI BEASISWA', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 1, color: isDark ? Colors.grey.shade400 : Colors.grey.shade600)),
-              const SizedBox(height: 8),
-              SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                child: Row(
-                  children: [
-                    _buildKategoriChip('Semua', 0, isDark, primaryWarna),
-                    const SizedBox(width: 8),
-                    _buildKategoriChip('Prestasi', 1, isDark, primaryWarna),
-                    const SizedBox(width: 8),
-                    _buildKategoriChip('Umum', 2, isDark, primaryWarna),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 24),
-
+              Expanded(
+                child: RefreshIndicator(
+                  onRefresh: () => Provider.of<ScholarshipProvider>(context, listen: false).loadScholarships(),
+                  color: primaryWarna,
+                  child: ListView(
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                    children: [
               // Big Stat Card (Total Beasiswa)
               Container(
                 width: double.infinity,
@@ -196,10 +186,27 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
               // Row Small Stats
               Row(
                 children: [
-                  Expanded(child: _buildSmallStatCard('8,492', 'TOTAL KUNJUNGAN', Icons.group, Colors.green.shade100, Colors.green.shade800, isDark, surfaceWarna)),
+                  Expanded(child: _buildSmallStatCard('$totalViews', 'TOTAL KUNJUNGAN', Icons.remove_red_eye, Colors.green.shade100, Colors.green.shade800, isDark, surfaceWarna)),
                   const SizedBox(width: 16),
                   Expanded(child: _buildSmallStatCard('$totalBookmarks', 'TOTAL BOOKMARKS', Icons.bookmark, Colors.orange.shade100, Colors.orange.shade800, isDark, surfaceWarna)),
                 ],
+              ),
+              const SizedBox(height: 16),
+              
+              // Kategori Beasiswa
+              Text('KATEGORI BEASISWA', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 1, color: isDark ? Colors.grey.shade400 : Colors.grey.shade600)),
+              const SizedBox(height: 8),
+              SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(
+                  children: [
+                    _buildKategoriChip('Semua', 0, isDark, primaryWarna),
+                    const SizedBox(width: 8),
+                    _buildKategoriChip('Prestasi', 1, isDark, primaryWarna),
+                    const SizedBox(width: 8),
+                    _buildKategoriChip('Umum', 2, isDark, primaryWarna),
+                  ],
+                ),
               ),
               const SizedBox(height: 32),
               
@@ -207,11 +214,35 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
               Text('Daftar Beasiswa', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black)),
               const SizedBox(height: 16),
               
-              ...beasiswaTampil.map((beasiswa) {
-                return _buildBeasiswaCard(beasiswa, isDark, surfaceWarna, primaryWarna);
-              }).toList(),
+              if (beasiswaTampil.isEmpty)
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 40),
+                  child: Column(
+                    children: [
+                      Icon(Icons.search_off, size: 80, color: isDark ? Colors.grey.shade600 : Colors.grey.shade400),
+                      const SizedBox(height: 16),
+                      Text(
+                        'Belum ada beasiswa yang sesuai pencarianmu :(',
+                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black87),
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        'Cek kembali nanti ya!',
+                        style: TextStyle(color: isDark ? Colors.grey.shade400 : Colors.grey.shade600),
+                      ),
+                    ],
+                  ),
+                )
+              else
+                ...beasiswaTampil.map((beasiswa) {
+                  return _buildBeasiswaCard(beasiswa, isDark, surfaceWarna, primaryWarna);
+                }).toList(),
               
-              const SizedBox(height: 80), // Ruang ekstra agar tidak tertutup FAB/Bottom Nav
+                    ],
+                  ),
+                ),
+              ),
             ],
           ),
           
@@ -234,38 +265,6 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
             child: const Icon(Icons.add, color: Colors.black87),
           ),
           
-          // Bottom Navigation Bar
-          bottomNavigationBar: Container(
-            decoration: BoxDecoration(
-              color: surfaceWarna,
-              boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10, offset: const Offset(0, -5))],
-              borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-            ),
-            child: BottomNavigationBar(
-              backgroundColor: Colors.transparent,
-              elevation: 0,
-              showSelectedLabels: true,
-              showUnselectedLabels: true,
-              selectedItemColor: primaryWarna,
-              unselectedItemColor: Colors.grey,
-              selectedLabelStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
-              unselectedLabelStyle: const TextStyle(fontSize: 12),
-              items: [
-                BottomNavigationBarItem(
-                  icon: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 6),
-                    decoration: BoxDecoration(color: isDark ? Colors.green.shade900 : Colors.green.shade200, borderRadius: BorderRadius.circular(20)),
-                    child: Icon(Icons.home, color: isDark ? Colors.white : Colors.green.shade900),
-                  ),
-                  label: 'Home',
-                ),
-                const BottomNavigationBarItem(
-                  icon: Padding(padding: EdgeInsets.symmetric(vertical: 6), child: Icon(Icons.group_outlined)),
-                  label: 'Pengguna',
-                ),
-              ],
-            ),
-          ),
         );
       }
     );
@@ -381,6 +380,14 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                     Text(host, style: TextStyle(fontSize: 14, color: isDark ? Colors.grey.shade400 : Colors.grey.shade600)),
                     // Menampilkan Negara tepat di bawah Penyelenggara
                     Text(negara, style: TextStyle(fontSize: 14, color: isDark ? Colors.grey.shade400 : Colors.grey.shade600)),
+                    const SizedBox(height: 4),
+                    Row(
+                      children: [
+                        const Icon(Icons.remove_red_eye, size: 14, color: WarnaSigma.emas),
+                        const SizedBox(width: 4),
+                        Text('${beasiswa['views'] ?? 0} Kali Dilihat', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: WarnaSigma.emas)),
+                      ],
+                    ),
                   ],
                 ),
               ),
@@ -447,7 +454,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                   children: [
                     Text('Mulai: $mulai', style: TextStyle(fontSize: 13, color: isDark ? Colors.grey.shade400 : Colors.grey.shade600)),
                     const SizedBox(height: 4),
-                    Text('Tutup: $tutup', style: TextStyle(fontSize: 13, color: isDark ? Colors.grey.shade500 : Colors.grey.shade500)),
+                    Text('Tutup: $tutup', style: TextStyle(fontSize: 13, color: isDark ? Colors.red.shade400 : Colors.red.shade700, fontWeight: FontWeight.w600)),
                   ],
                 ),
               ),
@@ -456,7 +463,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                   Navigator.push(
                     context,
                     PageRouteBuilder(
-                      pageBuilder: (context, a1, a2) => DetailScreen(beasiswa: beasiswa),
+                      pageBuilder: (context, a1, a2) => DetailScreen(beasiswa: beasiswa, isAdmin: true),
                       transitionDuration: Duration.zero,
                       reverseTransitionDuration: Duration.zero,
                     ),
@@ -471,71 +478,4 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     );
   }
 
-  // --- DRAWER MENU UNTUK KELUAR/LOGOUT (TANPA GARIS HITAM) ---
-  Widget _buildDrawer(BuildContext context, bool isDark, Color primaryWarna) {
-    return Drawer(
-      backgroundColor: isDark ? const Color(0xFF121212) : Colors.white,
-      child: Column(
-        children: [
-          UserAccountsDrawerHeader(
-            decoration: BoxDecoration(color: primaryWarna),
-            accountName: const Text('Admin SIGMA', style: TextStyle(fontWeight: FontWeight.bold)),
-            accountEmail: const Text('Administrator'),
-            currentAccountPicture: const CircleAvatar(backgroundColor: Colors.white, child: Text('A', style: TextStyle(fontSize: 30, fontWeight: FontWeight.bold))),
-          ),
-          // HIGHLIGHT UNTUK HALAMAN AKTIF (Kelola Beasiswa)
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 4.0),
-            child: ListTile(
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-              selected: true,
-              selectedTileColor: isDark ? primaryWarna.withOpacity(0.15) : primaryWarna.withOpacity(0.1),
-              leading: Icon(Icons.school, color: primaryWarna),
-              title: Text('Kelola Beasiswa', style: TextStyle(color: primaryWarna, fontWeight: FontWeight.bold)),
-              onTap: () {
-                Navigator.pop(context); // Tutup drawer karena sudah di halaman ini
-              },
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 4.0),
-            child: ListTile(
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-              leading: Icon(Icons.group, color: isDark ? Colors.white70 : Colors.black87),
-              title: Text('Pengguna', style: TextStyle(color: isDark ? Colors.white : Colors.black)),
-              onTap: () {},
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 4.0),
-            child: SwitchListTile(
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-              secondary: Icon(Icons.dark_mode, color: isDark ? Colors.white70 : Colors.black87),
-              title: Text('Mode Gelap', style: TextStyle(color: isDark ? Colors.white : Colors.black)),
-              value: globalDarkModeNotifier.value,
-              onChanged: (v) => globalDarkModeNotifier.value = v,
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 4.0),
-            child: ListTile(
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-              leading: sedangProsesKeluar
-                  ? const SizedBox(
-                      width: 20,
-                      height: 20,
-                      child: CircularProgressIndicator(color: Colors.red, strokeWidth: 2),
-                    )
-                  : const Icon(Icons.logout, color: Colors.red),
-              title: Text(
-                sedangProsesKeluar ? 'Mengeluarkan...' : 'Keluar / Logout',
-                style: const TextStyle(color: Colors.red, fontWeight: FontWeight.bold),
-              ),
-              onTap: sedangProsesKeluar ? null : prosesKeluar,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
 }
