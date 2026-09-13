@@ -53,7 +53,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
           'major': 'Teknik Informatika',
           'phone': nomorTelepon,
           'avatar_url': '',
-          'updated_at': DateTime.now().toIso8601String(),
+          'updated_at': DateTime.now().toUtc().toIso8601String(),
         });
 
         if (mounted) {

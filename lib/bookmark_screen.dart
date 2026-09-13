@@ -8,6 +8,8 @@ import 'profile/profile_screen.dart';
 import 'home_screen.dart'; 
 import 'providers/profile_provider.dart';
 import 'providers/bookmark_provider.dart';
+import 'providers/scholarship_provider.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 class BookmarkScreen extends StatefulWidget {
   const BookmarkScreen({super.key});
@@ -47,6 +49,8 @@ class _BookmarkScreenState extends State<BookmarkScreen> {
         // WARNA UTAMA DINAMIS
         Color primaryWarna = isDark ? Colors.green.shade400 : WarnaSigma.utama;
 
+        final bool isGuest = Supabase.instance.client.auth.currentUser == null;
+
         return Scaffold(
           backgroundColor: isDark ? const Color(0xFF121212) : WarnaSigma.latar,
           appBar: AppBar(
@@ -57,8 +61,8 @@ class _BookmarkScreenState extends State<BookmarkScreen> {
             title: Row(
               children: [
                 _buatAvatar(
-                  Provider.of<ProfileProvider>(context).avatarUrl,
-                  Provider.of<ProfileProvider>(context).name,
+                  isGuest ? '' : Provider.of<ProfileProvider>(context).avatarUrl,
+                  isGuest ? 'Tamu' : Provider.of<ProfileProvider>(context).name,
                   20,
                   14,
                   primaryWarna,
@@ -67,7 +71,7 @@ class _BookmarkScreenState extends State<BookmarkScreen> {
                 const SizedBox(width: 12),
                 Expanded(
                   child: Text(
-                    Provider.of<ProfileProvider>(context).name,
+                    isGuest ? 'Akun Tamu' : Provider.of<ProfileProvider>(context).name,
                     style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: primaryWarna, letterSpacing: -0.5),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
@@ -77,14 +81,21 @@ class _BookmarkScreenState extends State<BookmarkScreen> {
             ),
           ),
           
-          body: SingleChildScrollView(
-            child: Column(
-              children: [
-                if (daftarTersimpan.isEmpty) 
-                   _buatLayarKosong(isDark, primaryWarna)
-                else 
-                   _buatDaftarTersimpan(beasiswaTampil, isDark, primaryWarna),
-              ],
+          body: RefreshIndicator(
+            onRefresh: () async {
+              await Provider.of<ScholarshipProvider>(context, listen: false).loadScholarships();
+            },
+            color: primaryWarna,
+            child: SingleChildScrollView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              child: Column(
+                children: [
+                  if (daftarTersimpan.isEmpty) 
+                     _buatLayarKosong(isDark, primaryWarna)
+                  else 
+                     _buatDaftarTersimpan(beasiswaTampil, isDark, primaryWarna),
+                ],
+              ),
             ),
           ),
 
@@ -301,7 +312,7 @@ class _BookmarkScreenState extends State<BookmarkScreen> {
                         ),
                       ),
                       IconButton(
-                        icon: const Icon(Icons.bookmark, color: WarnaSigma.utama),
+                        icon: Icon(Icons.bookmark, color: primaryWarna),
                         onPressed: () {
                           Provider.of<BookmarkProvider>(context, listen: false).toggleBookmark(beasiswa);
                           
@@ -364,7 +375,7 @@ class _BookmarkScreenState extends State<BookmarkScreen> {
                                   const SizedBox(height: 2),
                                   Text(
                                     'Tutup: ${beasiswa['endDate'] ?? beasiswa['closingDate'] ?? 'TBA'} (${beasiswa['daysLeft'] ?? '-'})', 
-                                    style: TextStyle(fontSize: 12, color: isDark ? Colors.grey.shade400 : WarnaSigma.garisTepi),
+                                    style: TextStyle(fontSize: 12, color: isDark ? Colors.red.shade400 : Colors.red.shade700, fontWeight: FontWeight.w600),
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
                                   ),

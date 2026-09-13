@@ -9,6 +9,9 @@ import 'bookmark_screen.dart';
 import 'providers/profile_provider.dart';
 import 'providers/scholarship_provider.dart';
 import 'providers/bookmark_provider.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import 'widgets/carousel_beasiswa.dart';
+import 'login/login_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -18,9 +21,50 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  final int _indeksMenuBawah = 0; // Beranda selalu 0
+  final int _indeksMenuBawah = 0;
   String _kategoriTerpilih = 'Semua';
-  String _kataKunciPencarian = ''; 
+  String _kataKunciPencarian = '';
+
+  void _cekAksesTamu(VoidCallback aksiLanjutan) {
+    final user = Supabase.instance.client.auth.currentUser;
+    if (user == null) {
+      showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Akses Dibatasi'),
+          content: const Text('Silakan masuk atau daftar terlebih dahulu untuk mengakses fitur ini.'),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Batal', style: TextStyle(color: Colors.grey)),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: WarnaSigma.utama,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              ),
+              onPressed: () {
+                Navigator.pop(context); // Tutup dialog
+                Navigator.pushReplacement(
+                  context,
+                  PageRouteBuilder(
+                    pageBuilder: (context, a1, a2) => const LoginScreen(),
+                    transitionDuration: Duration.zero,
+                    reverseTransitionDuration: Duration.zero,
+                  ),
+                );
+              },
+              child: const Text('Masuk'),
+            ),
+          ],
+        ),
+      );
+    } else {
+      aksiLanjutan();
+    }
+  } 
 
   void _tampilkanNotifTersimpan(bool statusSimpan, bool isDark) {
     Color warnaAksen = isDark ? Colors.green.shade400 : WarnaSigma.utama;
@@ -35,7 +79,7 @@ class _HomeScreenState extends State<HomeScreen> {
             if (statusSimpan) 
               const SizedBox(width: 12),
             Text(
-              statusSimpan ? 'Beasiswa berhasil tersimpan!' : 'Beasiswa dihapus dari simpanan',
+              statusSimpan ? '1 Beasiswa berhasil tersimpan!' : 'Beasiswa dihapus dari simpanan',
               style: TextStyle(fontWeight: FontWeight.w600, color: isDark ? Colors.white : WarnaSigma.teksPermukaan),
             ),
           ],
@@ -69,6 +113,7 @@ class _HomeScreenState extends State<HomeScreen> {
         bool cocokTag = tags.any((tag) => tag.toString().toLowerCase().contains(query));
         cocokPencarian = nama.contains(query) || host.contains(query) || negara.contains(query) || cocokTag;
       }
+      
       return cocokKategori && cocokPencarian;
     }).toList();
 
@@ -77,6 +122,8 @@ class _HomeScreenState extends State<HomeScreen> {
       builder: (context, isDark, child) {
         // WARNA UTAMA DINAMIS: Hijau terang untuk Dark Mode, Hijau gelap untuk Light Mode
         Color primaryWarna = isDark ? Colors.green.shade400 : WarnaSigma.utama;
+
+        final bool isGuest = Supabase.instance.client.auth.currentUser == null;
 
         return Scaffold(
           backgroundColor: isDark ? const Color(0xFF121212) : WarnaSigma.latar,
@@ -88,8 +135,8 @@ class _HomeScreenState extends State<HomeScreen> {
             title: Row(
               children: [
                 _buatAvatar(
-                  Provider.of<ProfileProvider>(context).avatarUrl,
-                  Provider.of<ProfileProvider>(context).name,
+                  isGuest ? '' : Provider.of<ProfileProvider>(context).avatarUrl,
+                  isGuest ? 'Tamu' : Provider.of<ProfileProvider>(context).name,
                   20,
                   14,
                   primaryWarna,
@@ -98,7 +145,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 const SizedBox(width: 12),
                 Expanded(
                   child: Text(
-                    Provider.of<ProfileProvider>(context).name,
+                    isGuest ? 'Akun Tamu' : Provider.of<ProfileProvider>(context).name,
                     style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: primaryWarna, letterSpacing: -0.5),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
@@ -107,20 +154,57 @@ class _HomeScreenState extends State<HomeScreen> {
               ],
             ),
           ),
-          body: SingleChildScrollView(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 24, 20, 16),
-                  child: _buatBannerDinamis(isDark),
+          body: Column(
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
+                child: TextField(
+                  onChanged: (nilai) => setState(() => _kataKunciPencarian = nilai),
+                  style: TextStyle(color: isDark ? Colors.white : Colors.black),
+                  decoration: InputDecoration(
+                    hintText: 'Cari beasiswa, penyelenggara, S1...',
+                    hintStyle: TextStyle(color: isDark ? Colors.grey.shade500 : WarnaSigma.garisTepi, fontSize: 14),
+                    prefixIcon: Icon(Icons.search, color: isDark ? Colors.grey.shade500 : WarnaSigma.garisTepi),
+                    filled: true,
+                    fillColor: isDark ? const Color(0xFF1E1E1E) : Colors.white,
+                    contentPadding: const EdgeInsets.symmetric(vertical: 0, horizontal: 16),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide(color: isDark ? Colors.grey.shade800 : Colors.grey.shade300),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide(color: isDark ? Colors.grey.shade800 : Colors.grey.shade300),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide(color: primaryWarna),
+                    ),
+                  ),
                 ),
+              ),
+              Expanded(
+                child: RefreshIndicator(
+                  onRefresh: () => Provider.of<ScholarshipProvider>(context, listen: false).loadScholarships(),
+                  color: primaryWarna,
+                  child: SingleChildScrollView(
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(0, 16, 0, 16),
+                        child: CarouselBeasiswa(
+                          allBeasiswa: Provider.of<ScholarshipProvider>(context).scholarships,
+                          isDark: isDark,
+                        ),
+                      ),
 
                 SingleChildScrollView(
                   scrollDirection: Axis.horizontal,
                   padding: const EdgeInsets.symmetric(horizontal: 20),
                   child: Row(
-                    children: ['Semua', 'Prestasi', 'Umum'].map((kategori) {
+                    children: ['Semua', 'Prestasi', 'Umum', 'Tersimpan'].map((kategori) {
                       bool aktif = _kategoriTerpilih == kategori;
                       return Padding(
                         padding: const EdgeInsets.only(right: 8),
@@ -149,35 +233,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                 ),
 
-                const SizedBox(height: 16),
-
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 20),
-                  child: TextField(
-                    onChanged: (nilai) => setState(() => _kataKunciPencarian = nilai),
-                    style: TextStyle(color: isDark ? Colors.white : Colors.black),
-                    decoration: InputDecoration(
-                      hintText: 'Cari beasiswa, penyelenggara, S1...',
-                      hintStyle: TextStyle(color: isDark ? Colors.grey.shade500 : WarnaSigma.garisTepi, fontSize: 14),
-                      prefixIcon: Icon(Icons.search, color: isDark ? Colors.grey.shade500 : WarnaSigma.garisTepi),
-                      filled: true,
-                      fillColor: isDark ? const Color(0xFF1E1E1E) : Colors.white,
-                      contentPadding: const EdgeInsets.symmetric(vertical: 0, horizontal: 16),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: BorderSide(color: isDark ? Colors.grey.shade800 : Colors.grey.shade300),
-                      ),
-                      enabledBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: BorderSide(color: isDark ? Colors.grey.shade800 : Colors.grey.shade300),
-                      ),
-                      focusedBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: BorderSide(color: primaryWarna),
-                      ),
-                    ),
-                  ),
-                ),
+                const SizedBox(height: 8),
 
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -198,8 +254,29 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                 ),
 
-                ListView.builder(
-                  shrinkWrap: true,
+                if (beasiswaTampil.isEmpty)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 40),
+                    child: Column(
+                      children: [
+                        Icon(Icons.search_off, size: 80, color: isDark ? Colors.grey.shade600 : Colors.grey.shade400),
+                        const SizedBox(height: 16),
+                        Text(
+                          'Belum ada beasiswa yang sesuai pencarianmu :(',
+                          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black87),
+                          textAlign: TextAlign.center,
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          'Cek kembali nanti ya!',
+                          style: TextStyle(color: isDark ? Colors.grey.shade400 : Colors.grey.shade600),
+                        ),
+                      ],
+                    ),
+                  )
+                else
+                  ListView.builder(
+                    shrinkWrap: true,
                   physics: const NeverScrollableScrollPhysics(),
                   padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
                   itemCount: beasiswaTampil.length,
@@ -264,8 +341,10 @@ class _HomeScreenState extends State<HomeScreen> {
                                   color: apakahTersimpan ? primaryWarna : (isDark ? Colors.grey.shade500 : WarnaSigma.garisTepi),
                                 ),
                                 onPressed: () {
-                                  Provider.of<BookmarkProvider>(context, listen: false).toggleBookmark(beasiswa);
-                                  _tampilkanNotifTersimpan(!apakahTersimpan, isDark);
+                                  _cekAksesTamu(() {
+                                    Provider.of<BookmarkProvider>(context, listen: false).toggleBookmark(beasiswa);
+                                    _tampilkanNotifTersimpan(!apakahTersimpan, isDark);
+                                  });
                                 },
                               )
                             ],
@@ -313,7 +392,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                         children: [
                                           Text('Mulai: ${beasiswa['startDate']}', style: TextStyle(fontSize: 12, color: isDark ? Colors.grey.shade400 : WarnaSigma.garisTepi)),
                                           const SizedBox(height: 2),
-                                          Text('Tutup: ${beasiswa['endDate']} (${beasiswa['daysLeft']})', style: TextStyle(fontSize: 12, color: isDark ? Colors.grey.shade400 : WarnaSigma.garisTepi)),
+                                          Text('Tutup: ${beasiswa['endDate']} (${beasiswa['daysLeft']})', style: TextStyle(fontSize: 12, color: isDark ? Colors.red.shade400 : Colors.red.shade700, fontWeight: FontWeight.w600)),
                                         ],
                                       ),
                                     ),
@@ -322,14 +401,18 @@ class _HomeScreenState extends State<HomeScreen> {
                               ),
                               InkWell(
                                 // --- PERBAIKAN GLITCH PUTIH SAAT KLIK DETAIL ---
-                                onTap: () => Navigator.push(
-                                  context, 
-                                  PageRouteBuilder(
-                                    pageBuilder: (context, a1, a2) => DetailScreen(beasiswa: beasiswa),
-                                    transitionDuration: Duration.zero,
-                                    reverseTransitionDuration: Duration.zero,
-                                  ),
-                                ),
+                                onTap: () {
+                                  _cekAksesTamu(() {
+                                    Navigator.push(
+                                      context, 
+                                      PageRouteBuilder(
+                                        pageBuilder: (context, a1, a2) => DetailScreen(beasiswa: beasiswa),
+                                        transitionDuration: Duration.zero,
+                                        reverseTransitionDuration: Duration.zero,
+                                      ),
+                                    );
+                                  });
+                                },
                                 child: Padding(
                                   padding: const EdgeInsets.only(left: 8.0, bottom: 2.0),
                                   child: Text('Detail', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: primaryWarna)),
@@ -344,7 +427,11 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
                 const SizedBox(height: 80),
               ],
-            ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
           ),
 
           bottomNavigationBar: BottomNavigationBar(
@@ -379,47 +466,7 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _buatBannerDinamis(bool isDark) {
-    String judul = 'Buka Masa Depan Global Anda';
-    String subjudul = 'Jelajahi pilihan beasiswa unggulan kami untuk semua jenjang.';
-    String labelKecil = '';
 
-    if (_kategoriTerpilih == 'Prestasi') {
-      judul = 'Merayakan Keunggulan';
-      subjudul = 'Beasiswa untuk pelajar berprestasi dan pemimpin mahasiswa.';
-      labelKecil = 'Unggulan Prestasi';
-    } else if (_kategoriTerpilih == 'Umum') {
-      judul = 'Peluang Untuk Semua';
-      subjudul = 'Temukan berbagai pilihan beasiswa umum untuk mendukung perjalanan pendidikan Anda.';
-      labelKecil = 'Unggulan Umum';
-    }
-
-    return Container(
-      height: 160,
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: isDark ? const Color(0xFF0D47A1) : Colors.blue.shade50,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: isDark ? const Color(0xFF1565C0) : Colors.blue.shade100),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisAlignment: MainAxisAlignment.end,
-        children: [
-          if (labelKecil.isNotEmpty)
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-              margin: const EdgeInsets.only(bottom: 8),
-              decoration: BoxDecoration(color: WarnaSigma.emas, borderRadius: BorderRadius.circular(6)),
-              child: Text(labelKecil, style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: WarnaSigma.utama)),
-            ),
-          Text(judul, style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: isDark ? Colors.white : WarnaSigma.teksPermukaan)),
-          const SizedBox(height: 4),
-          Text(subjudul, style: TextStyle(fontSize: 14, color: isDark ? Colors.blue.shade100 : WarnaSigma.garisTepi)),
-        ],
-      ),
-    );
-  }
 
   Widget _buatAvatar(String avatarUrl, String name, double radius, double fontSize, Color primaryWarna, bool isDark) {
     if (avatarUrl.isNotEmpty) {

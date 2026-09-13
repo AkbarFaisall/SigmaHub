@@ -144,7 +144,7 @@ class ProfileProvider with ChangeNotifier {
         'major': _major,
         'phone': _phone,
         'avatar_url': _avatarUrl.isEmpty ? null : _avatarUrl,
-        'updated_at': DateTime.now().toIso8601String(),
+        'updated_at': DateTime.now().toUtc().toIso8601String(),
       });
       debugPrint('Profil berhasil disinkronkan ke Supabase.');
     } catch (e) {

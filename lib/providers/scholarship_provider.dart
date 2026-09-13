@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../supabase_config.dart';
+import '../services/notification_service.dart';
 
 class ScholarshipProvider with ChangeNotifier {
   List<Map<String, dynamic>> _scholarships = [];
@@ -134,6 +135,7 @@ class ScholarshipProvider with ChangeNotifier {
               'link': item['link'] ?? '',
               'logoPenyelenggara': item['logo_penyelenggara'] ?? '',
               'fotoUtama': item['foto_utama'] ?? '',
+              'views': item['views'] ?? 0,
             };
           }).toList();
 
@@ -244,6 +246,12 @@ class ScholarshipProvider with ChangeNotifier {
           newItem['id'] = response.first['id'];
           await _saveToLocal();
           notifyListeners();
+          
+          // Kirim Push Notification ke seluruh pengguna yang mengaktifkan fitur ini
+          NotificationService().kirimNotifikasiBeasiswaBaru(
+            newItem['name'] ?? 'Beasiswa Baru', 
+            'Pendaftaran telah dibuka! Cek aplikasi sekarang untuk detailnya.'
+          );
         }
       } catch (e) {
         debugPrint('Gagal menyimpan beasiswa baru ke Supabase: $e');
@@ -320,6 +328,30 @@ class ScholarshipProvider with ChangeNotifier {
         debugPrint('Beasiswa berhasil dihapus dari Supabase.');
       } catch (e) {
         debugPrint('Gagal menghapus beasiswa dari Supabase: $e');
+      }
+    }
+  }
+
+  /// Menginkremen jumlah penayangan (views) beasiswa
+  Future<void> incrementViews(dynamic id, int currentViews) async {
+    final int index = _scholarships.indexWhere((item) => item['id'] == id);
+    if (index != -1) {
+      final int newViews = currentViews + 1;
+      _scholarships[index]['views'] = newViews;
+      notifyListeners();
+      await _saveToLocal();
+
+      // Sinkronkan ke Supabase jika aktif
+      if (SupabaseConfig.isConfigured) {
+        try {
+          final client = Supabase.instance.client;
+          await client.from('beasiswa').update({
+            'views': newViews,
+          }).eq('id', id);
+          debugPrint('Views berhasil diperbarui di Supabase menjadi $newViews.');
+        } catch (e) {
+          debugPrint('Gagal memperbarui views di Supabase: $e');
+        }
       }
     }
   }

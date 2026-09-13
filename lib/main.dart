@@ -21,6 +21,7 @@ import 'supabase_config.dart';
 import 'providers/profile_provider.dart';
 import 'providers/scholarship_provider.dart';
 import 'providers/bookmark_provider.dart';
+import 'services/notification_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -48,6 +49,9 @@ void main() async {
   } catch (e) {
     debugPrint('Gagal membaca status tema lokal: $e');
   }
+
+  // 3. Inisialisasi Notifikasi (OneSignal & Local)
+  await NotificationService().init();
 
   runApp(
     MultiProvider(

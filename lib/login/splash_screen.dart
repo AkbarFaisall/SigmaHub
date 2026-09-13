@@ -1,9 +1,14 @@
 // File: lib/splash_screen.dart
 import 'package:flutter/material.dart';
 import 'dart:async';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:local_auth/local_auth.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../sigma_theme.dart';
-import '../profile/profile_screen.dart'; // IMPORT PROFILE UNTUK AKSES VARIABEL DARK MODE
-import 'login_screen.dart'; // IMPORT LOGIN SCREEN
+import '../profile/profile_screen.dart';
+import 'login_screen.dart';
+import '../home_screen.dart';
+import '../admin/admin_dashboard_screen.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -16,6 +21,9 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
   late AnimationController _kontrolerMuncul;
   late Animation<double> _animasiPudar;
   late Animation<Offset> _animasiNaik;
+  
+  bool _terkunci = false;
+  final LocalAuthentication _auth = LocalAuthentication();
 
   @override
   void initState() {
@@ -37,20 +45,77 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
 
     _kontrolerMuncul.forward();
 
-    // Timer 3 detik sebelum otomatis pindah ke halaman Login
     Timer(const Duration(seconds: 3), () {
       if (mounted) {
-        // MENGHILANGKAN GLITCH PUTIH SAAT PINDAH KE LOGIN
-        Navigator.pushReplacement(
-          context, 
-          PageRouteBuilder(
-            pageBuilder: (context, a1, a2) => const LoginScreen(),
-            transitionDuration: Duration.zero,
-            reverseTransitionDuration: Duration.zero,
-          ),
-        );
+        _prosesRouting();
       }
     });
+  }
+
+  Future<void> _prosesRouting() async {
+    final user = Supabase.instance.client.auth.currentUser;
+    if (user == null) {
+      _pindahHalaman(const LoginScreen());
+      return;
+    }
+
+    // Memperbarui rekam jejak aktif pengguna saat membuka aplikasi
+    try {
+      await Supabase.instance.client.from('profiles').update({
+        'updated_at': DateTime.now().toUtc().toIso8601String(),
+      }).eq('email', user.email!);
+    } catch (e) {
+      debugPrint('Gagal memperbarui status aktif: $e');
+    }
+
+    final prefs = await SharedPreferences.getInstance();
+    final kunciAktif = prefs.getBool('kunciAktif') ?? false;
+
+    Widget targetHalaman = const HomeScreen();
+    if (user.email == 'admin@sigma.edu') {
+      targetHalaman = const AdminDashboardScreen();
+    }
+
+    if (!kunciAktif) {
+      _pindahHalaman(targetHalaman);
+      return;
+    }
+
+    _verifikasiBiometrik(targetHalaman);
+  }
+
+  Future<void> _verifikasiBiometrik(Widget targetHalaman) async {
+    try {
+      final didAuthenticate = await _auth.authenticate(
+        localizedReason: 'Gunakan biometrik untuk membuka kunci aplikasi',
+        biometricOnly: false, 
+        persistAcrossBackgrounding: true,
+      );
+
+      if (didAuthenticate) {
+        _pindahHalaman(targetHalaman);
+      } else {
+        setState(() {
+          _terkunci = true;
+        });
+      }
+    } catch (e) {
+      setState(() {
+        _terkunci = true;
+      });
+    }
+  }
+
+  void _pindahHalaman(Widget halaman) {
+    if (!mounted) return;
+    Navigator.pushReplacement(
+      context, 
+      PageRouteBuilder(
+        pageBuilder: (context, a1, a2) => halaman,
+        transitionDuration: Duration.zero,
+        reverseTransitionDuration: Duration.zero,
+      ),
+    );
   }
 
   @override
@@ -68,9 +133,11 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
 
         return Scaffold(
           backgroundColor: isDark ? const Color(0xFF121212) : WarnaSigma.latar,
-          body: Center(
-            child: FadeTransition(
-              opacity: _animasiPudar,
+          body: _terkunci 
+            ? _buatLayarTerkunci(primaryWarna, isDark)
+            : Center(
+                child: FadeTransition(
+                  opacity: _animasiPudar,
               child: SlideTransition(
                 position: _animasiNaik,
                 child: Column(
@@ -163,6 +230,52 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
           ),
         );
       }
+    );
+  }
+
+  Widget _buatLayarTerkunci(Color primaryWarna, bool isDark) {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.lock, size: 80, color: primaryWarna),
+          const SizedBox(height: 16),
+          Text(
+            'Aplikasi Terkunci',
+            style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Silakan verifikasi identitas Anda',
+            style: TextStyle(color: isDark ? Colors.grey.shade400 : Colors.grey.shade600),
+          ),
+          const SizedBox(height: 32),
+          ElevatedButton.icon(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: primaryWarna,
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 12),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+            onPressed: () {
+              final user = Supabase.instance.client.auth.currentUser;
+              Widget target = const HomeScreen();
+              if (user?.email == 'admin@sigma.edu') target = const AdminDashboardScreen();
+              _verifikasiBiometrik(target);
+            },
+            icon: const Icon(Icons.fingerprint),
+            label: const Text('Coba Lagi', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+          ),
+          const SizedBox(height: 16),
+          TextButton(
+            onPressed: () {
+              Supabase.instance.client.auth.signOut();
+              _pindahHalaman(const LoginScreen());
+            },
+            child: Text('Keluar Akun', style: TextStyle(color: isDark ? Colors.grey.shade400 : Colors.grey.shade600)),
+          ),
+        ],
+      ),
     );
   }
 }

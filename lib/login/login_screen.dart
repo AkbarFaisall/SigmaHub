@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../sigma_theme.dart';
-import '../profile/profile_screen.dart'; 
+import '../profile/profile_screen.dart';
 import '../home_screen.dart'; 
 import 'register_screen.dart'; 
 import '../admin/admin_dashboard_screen.dart';
@@ -49,6 +49,15 @@ class _LoginScreenState extends State<LoginScreen> {
           Provider.of<BookmarkProvider>(context, listen: false).setUserEmail(email);
         }
 
+        // Memperbarui rekam jejak aktif pengguna saat manual login
+        try {
+          await Supabase.instance.client.from('profiles').update({
+            'updated_at': DateTime.now().toUtc().toIso8601String(),
+          }).eq('email', respon.user!.email!);
+        } catch (e) {
+          debugPrint('Gagal memperbarui status aktif: $e');
+        }
+
         // Tentukan halaman tujuan berdasarkan level akses (admin vs user biasa)
         Widget targetHalaman = (email == "admin@sigma.edu")
             ? const AdminDashboardScreen()
@@ -57,9 +66,9 @@ class _LoginScreenState extends State<LoginScreen> {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text(
-                'Login berhasil sebagai ${email == "admin@sigma.edu" ? "Admin" : "User"}!',
-                style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white),
+              content: const Text(
+                'Berhasil login',
+                style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white),
               ),
               backgroundColor: primaryWarna,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(99)),
@@ -82,10 +91,10 @@ class _LoginScreenState extends State<LoginScreen> {
         }
       }
     } on AuthException catch (e) {
-      String pesanError = 'Kredensial salah';
+      String pesanError = 'password salah';
       // Menyesuaikan pesan error agar lebih ramah bagi pengguna Indonesia
       if (e.message.contains('Invalid login credentials') || e.statusCode == '400') {
-        pesanError = 'Kredensial salah atau email tidak ditemukan';
+        pesanError = 'password salah atau email tidak ditemukan';
       } else {
         pesanError = e.message;
       }
@@ -320,6 +329,34 @@ class _LoginScreenState extends State<LoginScreen> {
                                       Icon(Icons.arrow_forward, size: 20),
                                     ],
                                   ),
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        
+                        // Lanjutkan sebagai Tamu (Tombol Berwarna)
+                        SizedBox(
+                          width: double.infinity,
+                          height: 52,
+                          child: OutlinedButton.icon(
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: primaryWarna,
+                              side: BorderSide(color: primaryWarna, width: 1.5),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                            ),
+                            onPressed: () {
+                              Provider.of<ProfileProvider>(context, listen: false).setProfileEmail('');
+                              Provider.of<BookmarkProvider>(context, listen: false).setUserEmail('');
+                              Navigator.pushReplacement(
+                                context,
+                                PageRouteBuilder(
+                                  pageBuilder: (context, a1, a2) => const HomeScreen(),
+                                  transitionDuration: Duration.zero,
+                                  reverseTransitionDuration: Duration.zero,
+                                ),
+                              );
+                            },
+                            icon: const Icon(Icons.person_outline, size: 20),
+                            label: const Text('Masuk sebagai Tamu', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
                           ),
                         ),
                         const SizedBox(height: 24),
